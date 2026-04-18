@@ -1,0 +1,17 @@
+{
+  "name": "KriyaChain Explorer",
+  "short_name": "KriyaChain",
+  "description": "Sistem Verifikasi Wastra Nusantara",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8F7F4",
+  "theme_color": "#4A2E1B",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
