@@ -40,8 +40,9 @@ The platform bridges traditional master craftsmanship with modern digital transp
 
 <table>
   <tr>
-    <td align="center"><img src="assets/batik.1.png" width="100%" alt="Nexus Dashboard 1"/></td>
-    <td align="center"><img src="assets/batik.2.png" width="100%" alt="Nexus Analytics 2"/></td>
+    <td align="center"><img src="assets/batik1.png" width="100%" alt="KriyaChain 1"/></td>
+    <td align="center"><img src="assets/batik2.png" width="100%" alt="KriyaChain 2"/></td>
+    <td align="center"><img src="assets/batik3.png" width="100%" alt="KriyaChain 3"/></td>
   </tr>
 </table>
 
