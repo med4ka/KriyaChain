@@ -45,12 +45,12 @@ The platform bridges traditional master craftsmanship with modern digital transp
 
 ### Frontend Installation
 
-cd frontend
-npm install
-npm run dev
+* ** cd frontend
+* ** npm install
+* ** npm run dev
 
 Backend Installation
 
-cd backend
-go mod download
-go run main.go
+* ** cd backend
+* ** go mod download
+* ** go run main.go
