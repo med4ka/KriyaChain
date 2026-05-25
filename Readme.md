@@ -29,14 +29,21 @@ The platform bridges traditional master craftsmanship with modern digital transp
 
 ## ⚡ Core Ecosystem Features
 
-*   ** Kriya Explorer:** A curated digital library showcasing verified masterpieces of Wastra Nusantara, complete with origin sorting (e.g., Pekalongan, Cirebon), artisan details, and real-time ledger verification hashes[cite: 4].
-*   ** Verifikasi Wastra (QR & Manual Scanner):** A hybrid verification gateway allowing collectors to scan a textile's physical QR tag via an in-app camera or manually input its unique cryptographic UUID to authenticate its origin[cite: 2, 4].
-*   ** Dynamic Provenance Timeline:** A visual timeline tracking the historical evolution of the textile, documenting its creation process, raw material sourcing, and regional historical context[cite: 4].
-*   ** Ownership Claiming Infrastructure:** A seamless Web2.5 ownership transition module where verified buyers can claim official digital custody of the physical masterpiece, preventing marketplace duplication[cite: 2, 4].
+*   Kriya Explorer: A curated digital library showcasing verified masterpieces of Wastra Nusantara, complete with origin sorting (e.g., Pekalongan, Cirebon), artisan details, and real-time ledger verification hashes[cite: 4].
+*   Verifikasi Wastra (QR & Manual Scanner): A hybrid verification gateway allowing collectors to scan a textile's physical QR tag via an in-app camera or manually input its unique cryptographic UUID to authenticate its origin[cite: 2, 4].
+*   Dynamic Provenance Timeline: A visual timeline tracking the historical evolution of the textile, documenting its creation process, raw material sourcing, and regional historical context[cite: 4].
+*   Ownership Claiming Infrastructure: A seamless Web2.5 ownership transition module where verified buyers can claim official digital custody of the physical masterpiece, preventing marketplace duplication[cite: 2, 4].
 
 ---
 
 ## 📸 Interface Showroom
+
+<table>
+  <tr>
+    <td align="center"><img src="assets/batik.1.png" width="100%" alt="Nexus Dashboard 1"/></td>
+    <td align="center"><img src="assets/batik.2.png" width="100%" alt="Nexus Analytics 2"/></td>
+  </tr>
+</table>
 
 ### 🛡️ The 3-Step Protection Protocol
 1. Registrasi Karya ───> 2. Pindai & Pelajari ───> 3. Klaim Kepemilikan
