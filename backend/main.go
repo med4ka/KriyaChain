@@ -8,6 +8,7 @@ import (
 
 	"prepdev-backend/config"
 	"prepdev-backend/controllers"
+	"prepdev-backend/internal/auth"
 	"prepdev-backend/models"
 
 	"github.com/gin-gonic/gin"
@@ -53,11 +54,11 @@ func main() {
 	config.ConnectDB()
 
 	log.Println("Menjalankan Sinkronisasi Database...")
-	err = config.DB.AutoMigrate(&models.Product{}, &models.TransferHistory{})
+	err = config.DB.AutoMigrate(&models.Product{}, &models.TransferHistory{}, &models.Artisan{}, &models.Owner{})
 	if err != nil {
 		log.Fatalf("FATAL ERROR: Gagal migrate database: %v", err)
 	}
-	log.Println("Tabel [products] dan [transfer_histories] Berhasil Dibuat/Diupdate!")
+	log.Println("Tabel [products], [transfer_histories], [artisans], [owners] Berhasil Dibuat/Diupdate!")
 
 	r := gin.Default()
 	r.Use(RateLimiterMiddleware())
@@ -74,6 +75,19 @@ func main() {
 	})
 
 	r.GET("/api/ping", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"status": "OK"}) })
+
+	authRepo := auth.NewRepository()
+	authSvc := auth.NewService(authRepo)
+	authHandler := auth.NewHandler(authSvc)
+
+	authGroup := r.Group("/api/auth")
+	{
+		authGroup.POST("/artisan/register", authHandler.RegisterArtisan)
+		authGroup.POST("/artisan/login", authHandler.LoginArtisan)
+		authGroup.POST("/owner/register", authHandler.RegisterOwner)
+		authGroup.POST("/owner/login", authHandler.LoginOwner)
+		authGroup.POST("/refresh", authHandler.RefreshToken)
+	}
 
 	r.POST("/api/products", controllers.CreateProduct)
 	r.GET("/api/products/scan/:qr_code", controllers.GetProductByQR)
