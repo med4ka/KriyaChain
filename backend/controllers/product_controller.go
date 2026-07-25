@@ -1,8 +1,9 @@
 package controllers
 
 import (
+	"crypto/rand"
 	"encoding/csv"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"prepdev-backend/config"
 	"prepdev-backend/internal/utils"
@@ -94,7 +95,12 @@ func generateClaimCode() string {
 	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	code := make([]byte, 8)
 	for i := range code {
-		code[i] = charset[rand.Intn(len(charset))]
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			code[i] = charset[0]
+			continue
+		}
+		code[i] = charset[n.Int64()]
 	}
 	return string(code)
 }
@@ -154,7 +160,10 @@ func EditProduct(c *gin.Context) {
 		product.ImageURL = input.ImageURL
 	}
 
-	config.DB.Save(&product)
+	if err := config.DB.Save(&product).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal menyimpan perubahan wastra"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Data Wastra berhasil diperbarui!", "data": product})
 }
 
@@ -275,9 +284,18 @@ func GetStats(c *gin.Context) {
 	var totalClaimed int64
 	var totalTransfers int64
 
-	config.DB.Model(&models.Product{}).Count(&totalProducts)
-	config.DB.Model(&models.Product{}).Where("is_claimed = ?", true).Count(&totalClaimed)
-	config.DB.Model(&models.TransferHistory{}).Count(&totalTransfers)
+	if err := config.DB.Model(&models.Product{}).Count(&totalProducts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal mengambil data statistik"})
+		return
+	}
+	if err := config.DB.Model(&models.Product{}).Where("is_claimed = ?", true).Count(&totalClaimed).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal mengambil data statistik"})
+		return
+	}
+	if err := config.DB.Model(&models.TransferHistory{}).Count(&totalTransfers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal mengambil data statistik"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": gin.H{"total_products": totalProducts, "total_claimed": totalClaimed, "total_transfers": totalTransfers}})
 }
@@ -295,13 +313,17 @@ func ExportProductsCSV(c *gin.Context) {
 	writer := csv.NewWriter(c.Writer)
 	defer writer.Flush()
 
-	writer.Write([]string{"UUID Wastra", "Nama Wastra", "Pengrajin", "Asal Daerah", "Status", "Pemilik Saat Ini", "Tanggal Registrasi"})
+	if err := writer.Write([]string{"UUID Wastra", "Nama Wastra", "Pengrajin", "Asal Daerah", "Status", "Pemilik Saat Ini", "Tanggal Registrasi"}); err != nil {
+		return
+	}
 
 	for _, p := range products {
 		status := "Tersedia"
 		if p.IsClaimed {
 			status = "Dimiliki"
 		}
-		writer.Write([]string{p.QRCodeHash, p.Name, p.Artisan, p.Origin, status, p.OwnerName, p.CreatedAt.Format("02 Jan 2006 15:04")})
+		if err := writer.Write([]string{p.QRCodeHash, p.Name, p.Artisan, p.Origin, status, p.OwnerName, p.CreatedAt.Format("02 Jan 2006 15:04")}); err != nil {
+			return
+		}
 	}
 }

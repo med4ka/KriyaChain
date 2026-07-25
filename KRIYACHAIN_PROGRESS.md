@@ -3,7 +3,7 @@
 > Update SETIAP kali satu fase/task selesai. Baca ini dulu sebelum lanjut kerja kalau sesi terputus.
 
 **Terakhir update:** 25 Juli 2026
-**Fase aktif sekarang:** ✅ Fase 1-2 selesai — lanjut Fase 3
+**Fase aktif sekarang:** ✅ Fase 1-3 selesai — STOP, tunggu review untuk lanjut Fase 4
 
 ---
 
@@ -13,7 +13,7 @@
 |---|---|---|---|---|---|
 | 1 | Auth backend (artisan + owner) | ✅ Selesai | 25 Jul 2026 | 25 Jul 2026 | 6 file baru di internal/, 2 model baru, JWT access+refresh |
 | 2 | Model kepemilikan (claim code + transfer) | ✅ Selesai | 25 Jul 2026 | 25 Jul 2026 | 3 file baru internal/product, rewrite claim & transfer 2-sisi
-| 3 | Fix keamanan dasar (CORS, validasi, DB_URL) | ⬜ Belum mulai | | | |
+| 3 | Fix keamanan dasar (CORS, validasi, DB_URL) | ✅ Selesai | 25 Jul 2026 | 25 Jul 2026 | CORS origin spesifik, validasi input, crypto/rand, no silent failures
 | 4 | Penyimpanan gambar | ⬜ Belum mulai | | | |
 | 5 | Frontend (auth UI, env var, toast, claim code form) | ⬜ Belum mulai | | | |
 | 6 | PWA (manifest, service worker, test install) | ⬜ Belum mulai | | | |
@@ -125,8 +125,28 @@ Status: ⬜ Belum mulai · 🟡 Sedang dikerjakan · ✅ Selesai · 🔴 Blocked
 - [x] `EditProduct` validasi artisan yang sama (from JWT)
 - [x] Semua compile (`go build ./...` sukses)
 
-### Fase 3 — Keamanan dasar
-- Belum ada progress.
+### Fase 3 — Keamanan dasar ✅
+
+**Tujuan:** CORS dari wildcard ke origin spesifik, validasi input semua field required di backend, fix DB_URL, no silent failures.
+
+**Perubahan:**
+
+| Area | Detail |
+|---|---|
+| **CORS** | Ganti `Access-Control-Allow-Origin: *` → origin dari env `ALLOWED_ORIGIN` (default `http://localhost:3000`). Hanya set header jika Origin request cocok. |
+| **Validasi input** | Semua field required di struct sudah pakai `binding:"required"` Gin; tambah explicit empty-string check di `CreateProduct` & `EditProduct` |
+| **DB_URL** | Di Fase 1 sudah diubah dari `dbname=finance_ai` ke `dbname=kriyachain` |
+| **crypto/rand** | `generateClaimCode` ganti dari `math/rand` (predictable) ke `crypto/rand` (secure random) |
+| **No silent failures** | `EditProduct`: `Save` error sekarang dicek; `GetStats`: error semua query `.Count()` dicek; `ExportProductsCSV`: error `writer.Write()` dicek; semua kode internal (auth, product) sudah proper error handling |
+| **ALLOWED_ORIGIN** | Ditambahkan ke `.env` untuk dokumentasi |
+
+**Definisi of Done checklist (Fase 3):**
+- [x] CORS bukan wildcard — pakai env `ALLOWED_ORIGIN` + fallback localhost:3000
+- [x] `DB_URL` sudah pakai `dbname=kriyachain`, bukan `finance_ai`
+- [x] Tidak ada error dibuang diam-diam (backend): `EditProduct`, `GetStats`, `ExportProductsCSV` diperbaiki; kode baru di internal/ sudah proper
+- [x] Claim code generation pakai `crypto/rand` (secure)
+- [x] Semua field required divalidasi di backend (binding + empty check)
+- [x] Semua compile (`go build ./...` sukses)
 
 ### Fase 4 — Penyimpanan gambar
 - Belum ada progress.

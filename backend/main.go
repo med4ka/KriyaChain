@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 
 	"prepdev-backend/config"
@@ -65,8 +66,15 @@ func main() {
 	r := gin.Default()
 	r.Use(RateLimiterMiddleware())
 
+	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "http://localhost:3000"
+	}
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if origin == allowedOrigin {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if c.Request.Method == "OPTIONS" {
