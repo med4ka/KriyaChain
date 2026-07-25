@@ -9,6 +9,8 @@ import (
 	"prepdev-backend/config"
 	"prepdev-backend/controllers"
 	"prepdev-backend/internal/auth"
+	"prepdev-backend/internal/middleware"
+	internalproduct "prepdev-backend/internal/product"
 	"prepdev-backend/models"
 
 	"github.com/gin-gonic/gin"
@@ -89,16 +91,25 @@ func main() {
 		authGroup.POST("/refresh", authHandler.RefreshToken)
 	}
 
-	r.POST("/api/products", controllers.CreateProduct)
-	r.GET("/api/products/scan/:qr_code", controllers.GetProductByQR)
-	r.PUT("/api/products/claim/:qr_code", controllers.ClaimProduct)
-	r.GET("/api/products/history/:qr_code", controllers.GetProductHistory)
-	r.PATCH("/api/products/transfer/:qr_code", controllers.TransferOwnership)
+	prodRepo := internalproduct.NewRepository()
+	prodSvc := internalproduct.NewService(prodRepo)
+	prodHandler := internalproduct.NewHandler(prodSvc)
+
 	r.GET("/api/products", controllers.GetAllProducts)
 	r.GET("/api/stats", controllers.GetStats)
+	r.GET("/api/products/scan/:qr_code", controllers.GetProductByQR)
+	r.GET("/api/products/history/:qr_code", controllers.GetProductHistory)
 	r.GET("/api/products/export", controllers.ExportProductsCSV)
 
-	r.PATCH("/api/products/edit/:qr_code", controllers.EditProduct)
+	r.POST("/api/products", middleware.ArtisanAuth(), controllers.CreateProduct)
+	r.PATCH("/api/products/edit/:qr_code", middleware.ArtisanAuth(), controllers.EditProduct)
+
+	r.PUT("/api/products/claim/:qr_code", middleware.OwnerAuth(), prodHandler.ClaimProduct)
+	r.POST("/api/products/transfer/:qr_code", middleware.OwnerAuth(), prodHandler.InitiateTransfer)
+
+	r.GET("/api/transfers/pending", middleware.OwnerAuth(), prodHandler.GetPendingTransfers)
+	r.PATCH("/api/transfers/accept", middleware.OwnerAuth(), prodHandler.AcceptTransfer)
+	r.PATCH("/api/transfers/reject", middleware.OwnerAuth(), prodHandler.RejectTransfer)
 
 	fmt.Println("Server running on http://localhost:8080")
 	r.Run(":8080")

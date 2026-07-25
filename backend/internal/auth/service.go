@@ -65,12 +65,12 @@ func (s *Service) RegisterArtisan(input RegisterInput) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	accessToken, err := utils.GenerateAccessToken(artisan.ID, "artisan")
+	accessToken, err := utils.GenerateAccessToken(artisan.ID, "artisan", artisan.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := utils.GenerateRefreshToken(artisan.ID, "artisan")
+	refreshToken, err := utils.GenerateRefreshToken(artisan.ID, "artisan", artisan.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -98,12 +98,12 @@ func (s *Service) LoginArtisan(input LoginInput) (*AuthResponse, error) {
 		return nil, errors.New("username atau password salah")
 	}
 
-	accessToken, err := utils.GenerateAccessToken(artisan.ID, "artisan")
+	accessToken, err := utils.GenerateAccessToken(artisan.ID, "artisan", artisan.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := utils.GenerateRefreshToken(artisan.ID, "artisan")
+	refreshToken, err := utils.GenerateRefreshToken(artisan.ID, "artisan", artisan.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -146,12 +146,12 @@ func (s *Service) RegisterOwner(input RegisterInput) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	accessToken, err := utils.GenerateAccessToken(owner.ID, "owner")
+	accessToken, err := utils.GenerateAccessToken(owner.ID, "owner", owner.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := utils.GenerateRefreshToken(owner.ID, "owner")
+	refreshToken, err := utils.GenerateRefreshToken(owner.ID, "owner", owner.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -179,12 +179,12 @@ func (s *Service) LoginOwner(input LoginInput) (*AuthResponse, error) {
 		return nil, errors.New("username atau password salah")
 	}
 
-	accessToken, err := utils.GenerateAccessToken(owner.ID, "owner")
+	accessToken, err := utils.GenerateAccessToken(owner.ID, "owner", owner.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := utils.GenerateRefreshToken(owner.ID, "owner")
+	refreshToken, err := utils.GenerateRefreshToken(owner.ID, "owner", owner.Name)
 	if err != nil {
 		return nil, err
 	}

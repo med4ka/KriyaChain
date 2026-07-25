@@ -120,13 +120,13 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	accessToken, err := utils.GenerateAccessToken(claims.UserID, claims.Role)
+	accessToken, err := utils.GenerateAccessToken(claims.UserID, claims.Role, claims.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal membuat access token baru"})
 		return
 	}
 
-	refreshToken, err := utils.GenerateRefreshToken(claims.UserID, claims.Role)
+	refreshToken, err := utils.GenerateRefreshToken(claims.UserID, claims.Role, claims.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal membuat refresh token baru"})
 		return

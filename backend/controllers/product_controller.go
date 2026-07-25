@@ -2,8 +2,10 @@ package controllers
 
 import (
 	"encoding/csv"
+	"math/rand"
 	"net/http"
 	"prepdev-backend/config"
+	"prepdev-backend/internal/utils"
 	"prepdev-backend/models"
 	"time"
 
@@ -13,7 +15,6 @@ import (
 
 type CreateProductInput struct {
 	Name        string `json:"name" binding:"required"`
-	Artisan     string `json:"artisan" binding:"required"`
 	Origin      string `json:"origin"`
 	Description string `json:"description"`
 	ImageURL    string `json:"image_url"`
@@ -22,33 +23,84 @@ type CreateProductInput struct {
 func CreateProduct(c *gin.Context) {
 	var input CreateProductInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Data tidak lengkap!"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Nama wastra wajib diisi!"})
 		return
+	}
+
+	if input.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Nama wastra tidak boleh kosong"})
+		return
+	}
+
+	artisanIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Harus login sebagai pengrajin"})
+		return
+	}
+	artisanID, err := uuid.Parse(artisanIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal membaca identitas pengrajin"})
+		return
+	}
+
+	artisanName, _ := c.Get("user_name")
+	artisanNameStr := ""
+	if artisanName != nil {
+		artisanNameStr = artisanName.(string)
 	}
 
 	uniqueQRHash := uuid.New().String()
 
-	product := models.Product{
-		Name:        input.Name,
-		Artisan:     input.Artisan,
-		Origin:      input.Origin,
-		Description: input.Description,
-		ImageURL:    input.ImageURL,
-		QRCodeHash:  uniqueQRHash,
-		IsClaimed:   false,
-	}
-
-	if err := config.DB.Create(&product).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": "Gagal menyimpan data wastra"})
+	claimCode := generateClaimCode()
+	claimCodeHash, err := utils.HashClaimCode(claimCode)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal memproses kode klaim"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"status": "success", "message": "Data Wastra Berhasil Ditambahkan!", "data": product})
+	product := models.Product{
+		Name:          input.Name,
+		Artisan:       artisanNameStr,
+		ArtisanID:     artisanID,
+		Origin:        input.Origin,
+		Description:   input.Description,
+		ImageURL:      input.ImageURL,
+		QRCodeHash:    uniqueQRHash,
+		ClaimCodeHash: claimCodeHash,
+		IsClaimed:     false,
+	}
+
+	if err := config.DB.Create(&product).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal menyimpan data wastra"})
+		return
+	}
+
+	type ProductWithClaimCode struct {
+		models.Product
+		ClaimCode string `json:"claim_code"`
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"status":  "success",
+		"message": "Data Wastra Berhasil Ditambahkan!",
+		"data": ProductWithClaimCode{
+			Product:   product,
+			ClaimCode: claimCode,
+		},
+	})
+}
+
+func generateClaimCode() string {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	code := make([]byte, 8)
+	for i := range code {
+		code[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(code)
 }
 
 type EditProductInput struct {
 	Name        string `json:"name" binding:"required"`
-	Artisan     string `json:"artisan" binding:"required"`
 	Origin      string `json:"origin"`
 	Description string `json:"description"`
 	ImageURL    string `json:"image_url"`
@@ -59,7 +111,23 @@ func EditProduct(c *gin.Context) {
 	var input EditProductInput
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Data tidak lengkap!"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Nama wastra wajib diisi!"})
+		return
+	}
+
+	if input.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Nama wastra tidak boleh kosong"})
+		return
+	}
+
+	artisanIDStr, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Harus login sebagai pengrajin"})
+		return
+	}
+	artisanID, err := uuid.Parse(artisanIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal membaca identitas pengrajin"})
 		return
 	}
 
@@ -69,10 +137,19 @@ func EditProduct(c *gin.Context) {
 		return
 	}
 
+	if product.ArtisanID != artisanID {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Anda bukan pengrajin yang mendaftarkan wastra ini"})
+		return
+	}
+
+	artisanName, _ := c.Get("user_name")
+
 	product.Name = input.Name
-	product.Artisan = input.Artisan
 	product.Origin = input.Origin
 	product.Description = input.Description
+	if artisanName != nil {
+		product.Artisan = artisanName.(string)
+	}
 	if input.ImageURL != "" {
 		product.ImageURL = input.ImageURL
 	}

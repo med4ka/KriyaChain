@@ -39,6 +39,7 @@ func ArtisanAuth() gin.HandlerFunc {
 		}
 
 		c.Set("user_id", claims.UserID.String())
+		c.Set("user_name", claims.Name)
 		c.Set("role", claims.Role)
 		c.Next()
 	}
