@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRightLeft, PlusCircle, History, QrCode, ShieldCheck, Database, UserCheck, Activity, Search, Download, ImagePlus, Edit3 } from "lucide-react";
+import { ArrowRightLeft, PlusCircle, History, QrCode, ShieldCheck, Database, UserCheck, Activity, Search, Download, ImagePlus, Edit3, LogOut } from "lucide-react";
 import QRCode from "react-qr-code";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { apiUrl, authHeaders } from "../lib/api";
 
 const ScrollAnimate = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => (
   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}>
@@ -23,17 +25,37 @@ const convertToBase64 = (file: File) => {
 };
 
 export default function AdminPage() {
+  const router = useRouter();
+  const [isAuthed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !!localStorage.getItem("token");
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (!isAuthed) {
+      router.push("/admin/auth");
+    }
+  }, [isAuthed, router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    toast.success("Berhasil keluar");
+    router.push("/admin/auth");
+  };
+
   const [activeTab, setActiveTab] = useState<"register" | "edit" | "transfer" | "history">("register");
   const [stats, setStats] = useState({ total_products: 0, total_claimed: 0, total_transfers: 0 });
 
-  const [formData, setFormData] = useState({ name: "", artisan: "", origin: "", description: "" });
+  const [formData, setFormData] = useState({ name: "", origin: "", description: "" });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [qrCode, setQrCode] = useState<string | null>(null);
 
   const [editSearch, setEditSearch] = useState("");
-  const [editStatus, setEditStatus] = useState<"idle" | "loading" | "found" | "not_found" | "saving">("idle");
+  const [editStatus, setEditStatus] = useState<"idle" | "loading" | "found" | "not_found" | "saving" | "error">("idle");
   const [editData, setEditData] = useState({ uuid: "", name: "", artisan: "", origin: "", description: "", image_url: "" });
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
@@ -47,7 +69,7 @@ export default function AdminPage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch("http://localhost:8080/api/stats");
+        const res = await fetch(apiUrl("/api/stats"));
         const json = await res.json();
         if (res.ok) setStats(json.data);
       } catch (error) { console.error("Gagal memuat statistik"); }
@@ -81,16 +103,16 @@ export default function AdminPage() {
         toast.dismiss("upload");
       }
 
-      const res = await fetch("http://localhost:8080/api/products", {
+      const res = await fetch(apiUrl("/api/products"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify({ ...formData, image_url: imageUrl }),
       });
       const data = await res.json();
       if (res.ok) {
         setStatus("success");
         setQrCode(data.data.qr_code);
-        setFormData({ name: "", artisan: "", origin: "", description: "" });
+        setFormData({ name: "", origin: "", description: "" });
         setImageFile(null); setImagePreview(null);
         toast.success("Wastra berhasil diamankan di Blockchain!");
       } else {
@@ -108,7 +130,7 @@ export default function AdminPage() {
     if (!editSearch) return;
     setEditStatus("loading");
     try {
-      const res = await fetch(`http://localhost:8080/api/products/scan/${editSearch}`);
+      const res = await fetch(apiUrl(`/api/products/scan/${editSearch}`));
       const json = await res.json();
       if (res.ok) {
         setEditData({
@@ -144,9 +166,9 @@ export default function AdminPage() {
         toast.dismiss("edit_upload");
       }
 
-      const res = await fetch(`http://localhost:8080/api/products/edit/${editData.uuid}`, {
+      const res = await fetch(apiUrl(`/api/products/edit/${editData.uuid}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify({
           name: editData.name,
           artisan: editData.artisan,
@@ -175,10 +197,11 @@ export default function AdminPage() {
     e.preventDefault();
     setTransferStatus("loading");
     try {
-      const res = await fetch(`http://localhost:8080/api/products/transfer/${transferData.uuid}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ new_owner_name: transferData.newOwner }),
+      const ownerToken = localStorage.getItem("owner_token");
+      const res = await fetch(apiUrl(`/api/products/transfer/${transferData.uuid}`), {
+        method: "POST",
+        headers: ownerToken ? { "Content-Type": "application/json", "Authorization": `Bearer ${ownerToken}` } : { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_username: transferData.newOwner }),
       });
       if (res.ok) {
         setTransferStatus("success");
@@ -196,7 +219,7 @@ export default function AdminPage() {
     if (!historySearch) return;
     setHistoryStatus("loading");
     try {
-      const res = await fetch(`http://localhost:8080/api/products/history/${historySearch}`);
+      const res = await fetch(apiUrl(`/api/products/history/${historySearch}`));
       const json = await res.json();
       if (res.ok) {
         setHistoryList(json.data || []);
@@ -209,6 +232,8 @@ export default function AdminPage() {
     } catch (error) { setHistoryStatus("error"); toast.error("Terjadi kesalahan jaringan."); }
   };
 
+  if (!isAuthed) return <div className="min-h-screen bg-[#F8F7F4] flex items-center justify-center"><div className="w-10 h-10 border-4 border-[#4A2E1B]/20 border-t-[#4A2E1B] rounded-full animate-spin" /></div>;
+
   return (
     <div className="min-h-screen bg-[#F8F7F4] text-[#4A2E1B] font-sans pb-20 relative">
       
@@ -219,24 +244,27 @@ export default function AdminPage() {
           </Link>
         </ScrollAnimate>
         <ScrollAnimate delay={0.1}>
-          <div className="flex gap-2 bg-[#4A2E1B]/5 p-1 rounded-2xl border border-[#4A2E1B]/10 backdrop-blur-sm overflow-x-auto max-w-full">
-            {[
-              { id: "register", icon: PlusCircle, label: "Registrasi" },
-              { id: "edit", icon: Edit3, label: "Edit" },
-              { id: "transfer", icon: ArrowRightLeft, label: "Transfer" },
-              { id: "history", icon: History, label: "Jejak" }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                  activeTab === tab.id ? "bg-[#4A2E1B] text-white shadow-lg" : "text-[#4A2E1B]/50 hover:text-[#4A2E1B]"
-                }`}
-              >
-                <tab.icon size={16} />
-                <span className="hidden md:block uppercase tracking-widest">{tab.label}</span>
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-2 bg-[#4A2E1B]/5 p-1 rounded-2xl border border-[#4A2E1B]/10 backdrop-blur-sm overflow-x-auto max-w-full">
+              {[
+                { id: "register", icon: PlusCircle, label: "Registrasi" },
+                { id: "edit", icon: Edit3, label: "Edit" },
+                { id: "transfer", icon: ArrowRightLeft, label: "Transfer" },
+                { id: "history", icon: History, label: "Jejak" }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                    activeTab === tab.id ? "bg-[#4A2E1B] text-white shadow-lg" : "text-[#4A2E1B]/50 hover:text-[#4A2E1B]"
+                  }`}
+                >
+                  <tab.icon size={16} />
+                  <span className="hidden md:block uppercase tracking-widest">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={handleLogout} className="p-2 bg-[#4A2E1B]/5 rounded-xl hover:bg-[#4A2E1B]/10 transition-colors text-[#4A2E1B]/50 hover:text-[#4A2E1B]" title="Keluar"><LogOut size={18} /></button>
           </div>
         </ScrollAnimate>
       </header>
@@ -249,7 +277,7 @@ export default function AdminPage() {
             <div>
               <h2 className="text-xl font-serif font-bold text-[#4A2E1B]">Overview Sistem</h2>
             </div>
-            <a href="http://localhost:8080/api/products/export" className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white rounded-xl text-xs font-bold hover:bg-green-800 transition-all shadow-lg shadow-green-700/20 active:scale-95">
+            <a href={apiUrl("/api/products/export")} className="flex items-center gap-2 px-4 py-2 bg-green-700 text-white rounded-xl text-xs font-bold hover:bg-green-800 transition-all shadow-lg shadow-green-700/20 active:scale-95">
               <Download size={14} /> Ekspor CSV
             </a>
           </div>
@@ -303,7 +331,6 @@ export default function AdminPage() {
                       <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Nama Wastra</label><input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-4 py-3 bg-white/50 border border-[#4A2E1B]/10 rounded-xl focus:ring-2 focus:ring-[#4A2E1B]/20 outline-none text-sm" placeholder="misal: Batik Parang" /></div>
                       <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Asal Daerah</label><input type="text" required value={formData.origin} onChange={(e) => setFormData({ ...formData, origin: e.target.value })} className="w-full px-4 py-3 bg-white/50 border border-[#4A2E1B]/10 rounded-xl focus:ring-2 focus:ring-[#4A2E1B]/20 outline-none text-sm" placeholder="misal: Pekalongan" /></div>
                     </div>
-                    <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Nama Pengrajin</label><input type="text" required value={formData.artisan} onChange={(e) => setFormData({ ...formData, artisan: e.target.value })} className="w-full px-4 py-3 bg-white/50 border border-[#4A2E1B]/10 rounded-xl focus:ring-2 focus:ring-[#4A2E1B]/20 outline-none text-sm" placeholder="Nama seniman pembuat" /></div>
                     <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Filosofi & Cerita</label><textarea rows={3} value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="w-full px-4 py-3 bg-white/50 border border-[#4A2E1B]/10 rounded-xl focus:ring-2 focus:ring-[#4A2E1B]/20 outline-none text-sm resize-none" placeholder="Ceritakan makna dibalik motif ini..." /></div>
                     
                     <button type="submit" disabled={status === "loading"} className="w-full bg-[#4A2E1B] text-white font-bold py-4 rounded-xl hover:shadow-2xl transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2">
@@ -369,7 +396,6 @@ export default function AdminPage() {
                         <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Nama Wastra</label><input type="text" required value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className="w-full px-4 py-3 bg-white border border-[#4A2E1B]/20 rounded-xl text-sm outline-none" /></div>
                         <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Asal Daerah</label><input type="text" required value={editData.origin} onChange={(e) => setEditData({ ...editData, origin: e.target.value })} className="w-full px-4 py-3 bg-white border border-[#4A2E1B]/20 rounded-xl text-sm outline-none" /></div>
                       </div>
-                      <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Nama Pengrajin</label><input type="text" required value={editData.artisan} onChange={(e) => setEditData({ ...editData, artisan: e.target.value })} className="w-full px-4 py-3 bg-white border border-[#4A2E1B]/20 rounded-xl text-sm outline-none" /></div>
                       <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Filosofi & Cerita</label><textarea rows={3} value={editData.description} onChange={(e) => setEditData({ ...editData, description: e.target.value })} className="w-full px-4 py-3 bg-white border border-[#4A2E1B]/20 rounded-xl text-sm outline-none resize-none" /></div>
                       
                       <button type="submit" disabled={editStatus === "saving"} className="w-full bg-amber-700 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-50">

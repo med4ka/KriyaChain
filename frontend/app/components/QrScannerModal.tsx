@@ -1,11 +1,12 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Camera, Search, UserCheck, Sparkles, MapPin, Milestone, QrCode, Download, Image as ImageIcon, Volume2, VolumeX, Share2, Compass } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { X, Camera, Search, UserCheck, Sparkles, MapPin, Milestone, QrCode, Download, Image as ImageIcon, Volume2, VolumeX, Share2, Compass, KeyRound } from "lucide-react";
+import { useState, useRef } from "react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useReactToPrint } from "react-to-print";
 import { toast } from "sonner";
+import { apiUrl } from "../lib/api";
 
 interface Props {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [activeView, setActiveView] = useState<"story" | "history">("story");
   const [claimName, setClaimName] = useState("");
+  const [claimCode, setClaimCode] = useState("");
   const [claimStatus, setClaimStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -29,14 +31,13 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
     documentTitle: `Sertifikat-KriyaChain-${wastraData?.name}`,
   });
 
-  const [savedWastra, setSavedWastra] = useState<any[]>([]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('kriyachain_collection');
-    if (saved) {
-      setSavedWastra(JSON.parse(saved));
+  const [savedWastra] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('kriyachain_collection');
+      return saved ? JSON.parse(saved) : [];
     }
-  }, []);
+    return [];
+  });
 
   const handleSpeak = (text: string) => {
     if ('speechSynthesis' in window) {
@@ -74,7 +75,7 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
 
   const saveToCollection = (data: any) => {
     const saved = localStorage.getItem('kriyachain_collection');
-    let collection = saved ? JSON.parse(saved) : [];
+    const collection = saved ? JSON.parse(saved) : [];
     
     if (!collection.find((item: any) => item.qr_code === data.qr_code)) {
       collection.push(data);
@@ -94,14 +95,14 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
     if (!manualCode) return;
     setStatus("loading"); setClaimStatus("idle"); setClaimName("");
     try {
-      const res = await fetch(`http://localhost:8080/api/products/scan/${manualCode}`);
+      const res = await fetch(apiUrl(`/api/products/scan/${manualCode}`));
       const data = await res.json();
       if (res.ok) {
         setWastraData(data.data);
         saveToCollection(data.data);
         setStatus("success");
         try {
-          const historyRes = await fetch(`http://localhost:8080/api/products/history/${manualCode}`);
+          const historyRes = await fetch(apiUrl(`/api/products/history/${manualCode}`));
           const historyJson = await historyRes.json();
           if (historyRes.ok) setHistoryData(historyJson.data || []);
         } catch (error) { console.error("Gagal load history", error); }
@@ -114,19 +115,23 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
     if (!claimName || !wastraData) return;
     setClaimStatus("loading");
     try {
-      const res = await fetch(`http://localhost:8080/api/products/transfer/${wastraData.qr_code}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ new_owner_name: claimName }),
+      const ownerToken = localStorage.getItem("owner_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (ownerToken) headers["Authorization"] = `Bearer ${ownerToken}`;
+      const res = await fetch(apiUrl(`/api/products/claim/${wastraData.qr_code}`), {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ owner_name: claimName, claim_code: claimCode }),
       });
       if (res.ok) {
         setClaimStatus("success");
         setWastraData({ ...wastraData, is_claimed: true, owner_name: claimName });
-        const historyRes = await fetch(`http://localhost:8080/api/products/history/${wastraData.qr_code}`);
+        const historyRes = await fetch(apiUrl(`/api/products/history/${wastraData.qr_code}`));
         const historyJson = await historyRes.json();
         if (historyRes.ok) setHistoryData(historyJson.data || []);
-      } else { setClaimStatus("error"); }
-    } catch (error) { setClaimStatus("error"); }
+        toast.success("Selamat! Wastra resmi menjadi milik Anda.");
+      } else { setClaimStatus("error"); toast.error("Klaim gagal! Periksa kode klaim."); }
+    } catch (error) { setClaimStatus("error"); toast.error("Terjadi kesalahan jaringan."); }
   };
 
   return (
@@ -267,10 +272,16 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
                           </button>
                         </div>
                       ) : (
-                        <form onSubmit={handleClaim} className="flex gap-2">
-                          <input type="text" required placeholder="Nama Anda..." value={claimName} onChange={(e) => setClaimName(e.target.value)} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs" />
-                          <button type="submit" disabled={claimStatus === "loading" || !claimName} className="px-4 py-2 bg-[#4A2E1B] text-white rounded-xl text-xs font-bold hover:bg-[#3A2214] transition-colors disabled:opacity-50">
-                            {claimStatus === "loading" ? "Proses..." : "Klaim"}
+                        <form onSubmit={handleClaim} className="space-y-3">
+                          <div className="flex gap-2">
+                            <input type="text" required placeholder="Nama Anda..." value={claimName} onChange={(e) => setClaimName(e.target.value)} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs" />
+                          </div>
+                          <div className="flex gap-2">
+                            <KeyRound size={16} className="text-[#4A2E1B]/40 self-center" />
+                            <input type="text" required placeholder="Kode Klaim (dari pengrajin)..." value={claimCode} onChange={(e) => setClaimCode(e.target.value)} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs font-mono tracking-wider" />
+                          </div>
+                          <button type="submit" disabled={claimStatus === "loading" || !claimName || !claimCode} className="w-full py-2 bg-[#4A2E1B] text-white rounded-xl text-xs font-bold hover:bg-[#3A2214] transition-colors disabled:opacity-50">
+                            {claimStatus === "loading" ? "Memverifikasi..." : "Klaim Wastra"}
                           </button>
                         </form>
                       )}

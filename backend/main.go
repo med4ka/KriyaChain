@@ -65,6 +65,7 @@ func main() {
 
 	r := gin.Default()
 	r.Use(RateLimiterMiddleware())
+	r.Static("/uploads", "./uploads")
 
 	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
@@ -109,6 +110,7 @@ func main() {
 	r.GET("/api/products/history/:qr_code", controllers.GetProductHistory)
 	r.GET("/api/products/export", controllers.ExportProductsCSV)
 
+	r.POST("/api/upload", middleware.ArtisanAuth(), internalproduct.UploadImage)
 	r.POST("/api/products", middleware.ArtisanAuth(), controllers.CreateProduct)
 	r.PATCH("/api/products/edit/:qr_code", middleware.ArtisanAuth(), controllers.EditProduct)
 

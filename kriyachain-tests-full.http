@@ -1,0 +1,245 @@
+@baseUrl = http://localhost:8080/api
+
+### =====================================================
+### 00. Sanity — Create Product TANPA token
+### EKSPEKTASI: status 401 atau 403
+### =====================================================
+POST {{baseUrl}}/products
+Content-Type: application/json
+
+{
+  "name": "Test Tanpa Auth",
+  "origin": "Test"
+}
+
+### =====================================================
+### SETUP AKUN
+### =====================================================
+
+### 01. Register Artisan 1
+POST {{baseUrl}}/auth/artisan/register
+Content-Type: application/json
+
+{
+  "name": "Pengrajin Satu",
+  "username": "qa_artisan1",
+  "password": "rahasia123"
+}
+
+### 02. Register Artisan 2
+POST {{baseUrl}}/auth/artisan/register
+Content-Type: application/json
+
+{
+  "name": "Pengrajin Dua",
+  "username": "qa_artisan2",
+  "password": "rahasia123"
+}
+
+### 03. Login Artisan 1
+# @name loginArtisan1
+POST {{baseUrl}}/auth/artisan/login
+Content-Type: application/json
+
+{
+  "username": "qa_artisan1",
+  "password": "rahasia123"
+}
+
+### 04. Login Artisan 2
+# @name loginArtisan2
+POST {{baseUrl}}/auth/artisan/login
+Content-Type: application/json
+
+{
+  "username": "qa_artisan2",
+  "password": "rahasia123"
+}
+
+### 05. Register Owner 1
+POST {{baseUrl}}/auth/owner/register
+Content-Type: application/json
+
+{
+  "name": "Pembeli Satu",
+  "username": "qa_owner1",
+  "password": "rahasia123"
+}
+
+### 06. Register Owner 2
+POST {{baseUrl}}/auth/owner/register
+Content-Type: application/json
+
+{
+  "name": "Pembeli Dua",
+  "username": "qa_owner2",
+  "password": "rahasia123"
+}
+
+### 07. Login Owner 1
+# @name loginOwner1
+POST {{baseUrl}}/auth/owner/login
+Content-Type: application/json
+
+{
+  "username": "qa_owner1",
+  "password": "rahasia123"
+}
+
+### 08. Login Owner 2
+# @name loginOwner2
+POST {{baseUrl}}/auth/owner/login
+Content-Type: application/json
+
+{
+  "username": "qa_owner2",
+  "password": "rahasia123"
+}
+
+### =====================================================
+### PRODUCT & KEAMANAN KRITIS
+### =====================================================
+
+### 09. Create Product (Artisan 1) — EKSPEKTASI: status 201
+# @name createProduct
+POST {{baseUrl}}/products
+Content-Type: application/json
+Authorization: Bearer {{loginArtisan1.response.body.$.data.access_token}}
+
+{
+  "name": "Batik QA Test",
+  "origin": "Jogja",
+  "description": "Produk buat full testing"
+}
+
+### 10. [CRITICAL] Artisan 2 coba edit produk milik Artisan 1
+### EKSPEKTASI: status 401 atau 403. Kalau malah 200, ini bug otorisasi serius — STOP.
+PATCH {{baseUrl}}/products/edit/{{createProduct.response.body.$.data.qr_code}}
+Content-Type: application/json
+Authorization: Bearer {{loginArtisan2.response.body.$.data.access_token}}
+
+{
+  "name": "DIUBAH PAKSA OLEH ARTISAN LAIN"
+}
+
+### 11. Sanity — Artisan 1 edit produknya sendiri
+### EKSPEKTASI: status 200 (harus berhasil untuk pemilik asli)
+PATCH {{baseUrl}}/products/edit/{{createProduct.response.body.$.data.qr_code}}
+Content-Type: application/json
+Authorization: Bearer {{loginArtisan1.response.body.$.data.access_token}}
+
+{
+  "description": "Deskripsi diperbarui oleh pemilik asli"
+}
+
+### 12. Scan produk publik (tanpa auth) — EKSPEKTASI: status 200, data lengkap muncul
+GET {{baseUrl}}/products/scan/{{createProduct.response.body.$.data.qr_code}}
+
+### 13. Claim dengan claim_code SALAH
+### EKSPEKTASI: status 400 atau 403, ditolak
+PUT {{baseUrl}}/products/claim/{{createProduct.response.body.$.data.qr_code}}
+Content-Type: application/json
+Authorization: Bearer {{loginOwner1.response.body.$.data.access_token}}
+
+{
+  "claim_code": "kode-ngasal-salah"
+}
+
+### 14. Claim dengan claim_code BENAR (Owner 1) — EKSPEKTASI: status 200
+PUT {{baseUrl}}/products/claim/{{createProduct.response.body.$.data.qr_code}}
+Content-Type: application/json
+Authorization: Bearer {{loginOwner1.response.body.$.data.access_token}}
+
+{
+  "claim_code": "{{createProduct.response.body.$.data.claim_code}}"
+}
+
+### 15. Claim ULANG oleh Owner 2 (produk sudah diklaim Owner 1)
+### EKSPEKTASI: status 409
+PUT {{baseUrl}}/products/claim/{{createProduct.response.body.$.data.qr_code}}
+Content-Type: application/json
+Authorization: Bearer {{loginOwner2.response.body.$.data.access_token}}
+
+{
+  "claim_code": "{{createProduct.response.body.$.data.claim_code}}"
+}
+
+### =====================================================
+### TRANSFER 2-SISI
+### =====================================================
+
+### 16. Transfer Initiate — Owner 1 ke Owner 2 — EKSPEKTASI: status 200/201, status="pending"
+POST {{baseUrl}}/products/transfer/{{createProduct.response.body.$.data.qr_code}}
+Content-Type: application/json
+Authorization: Bearer {{loginOwner1.response.body.$.data.access_token}}
+
+{
+  "target_username": "qa_owner2"
+}
+
+### 17. Owner 2 cek pending transfer
+### CATAT nilai "id" dari response ini, dipakai manual di langkah #18
+GET {{baseUrl}}/transfers/pending
+Authorization: Bearer {{loginOwner2.response.body.$.data.access_token}}
+
+### 18. [CRITICAL] Owner 2 REJECT transfer
+### Ganti REPLACE_ID_DARI_LANGKAH_17 dengan angka id dari respons #17 di atas
+### EKSPEKTASI: status 200, status transfer jadi "rejected"
+PATCH {{baseUrl}}/transfers/reject
+Content-Type: application/json
+Authorization: Bearer {{loginOwner2.response.body.$.data.access_token}}
+
+{
+  "transfer_id": REPLACE_ID_DARI_LANGKAH_17
+}
+
+### 19. [CRITICAL] Cek produk setelah reject
+### EKSPEKTASI: owner/owner_name di response ini HARUS MASIH "Pembeli Satu",
+### BUKAN "Pembeli Dua". Kalau ternyata sudah pindah ke Pembeli Dua padahal
+### baru saja di-reject, itu bug — reject seharusnya TIDAK memindahkan kepemilikan.
+GET {{baseUrl}}/products/scan/{{createProduct.response.body.$.data.qr_code}}
+
+### 20. Transfer Initiate LAGI — buat test alur Accept
+POST {{baseUrl}}/products/transfer/{{createProduct.response.body.$.data.qr_code}}
+Content-Type: application/json
+Authorization: Bearer {{loginOwner1.response.body.$.data.access_token}}
+
+{
+  "target_username": "qa_owner2"
+}
+
+### 21. Owner 2 cek pending lagi
+### CATAT nilai "id" baru dari response ini, dipakai manual di langkah #22
+GET {{baseUrl}}/transfers/pending
+Authorization: Bearer {{loginOwner2.response.body.$.data.access_token}}
+
+### 22. Owner 2 ACCEPT transfer
+### Ganti REPLACE_ID_DARI_LANGKAH_21 dengan angka id dari respons #21 di atas
+### EKSPEKTASI: status 200, status transfer jadi "accepted"
+PATCH {{baseUrl}}/transfers/accept
+Content-Type: application/json
+Authorization: Bearer {{loginOwner2.response.body.$.data.access_token}}
+
+{
+  "transfer_id": REPLACE_ID_DARI_LANGKAH_21
+}
+
+### 23. Cek produk setelah accept
+### EKSPEKTASI: owner/owner_name SEKARANG harus "Pembeli Dua"
+GET {{baseUrl}}/products/scan/{{createProduct.response.body.$.data.qr_code}}
+
+### 24. Riwayat kepemilikan lengkap
+### EKSPEKTASI: 3 entri — klaim awal (null→Owner1), reject (Owner1→Owner2,
+### status rejected), accept (Owner1→Owner2, status accepted)
+GET {{baseUrl}}/products/history/{{createProduct.response.body.$.data.qr_code}}
+
+### 25. Stats
+GET {{baseUrl}}/stats
+
+### =====================================================
+### YANG GAK BISA DITES LEWAT SINI — TES TERPISAH
+### =====================================================
+# 1. CORS — buka DevTools browser, fetch API ini dari origin lain, harus
+#    muncul error CORS di console. REST Client bukan browser, gak enforce CORS.
+# 2. Upload gambar — coba lewat form beneran di frontend (drag & drop foto).
+# 3. PWA — buka web di HP, coba "Add to Home Screen", cek behavior offline.

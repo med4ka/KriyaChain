@@ -6,6 +6,7 @@ import { Search, MapPin, User, ShieldCheck, ArrowLeft, Sparkles, Image as ImageI
 import Link from "next/link";
 import Tilt from "react-parallax-tilt";
 import { toast } from "sonner";
+import { apiUrl } from "../lib/api";
 
 // --- KUMPULAN FAKTA & LEGENDA WASTRA ---
 const wastraTrivia = [
@@ -63,7 +64,7 @@ export default function ExplorerPage() {
 
     const fetchProducts = async () => {
       try {
-        const res = await fetch("http://localhost:8080/api/products");
+        const res = await fetch(apiUrl("/api/products"));
         const json = await res.json();
         if (res.ok) setProducts(json.data || []);
       } catch (error) {
@@ -178,7 +179,7 @@ export default function ExplorerPage() {
                 transition={{ duration: 0.5 }}
                 className="text-[#4A2E1B] font-serif italic text-xl leading-relaxed"
               >
-                "{wastraTrivia[triviaIndex]}"
+                &ldquo;{wastraTrivia[triviaIndex]}&rdquo;
               </motion.p>
             </AnimatePresence>
             
