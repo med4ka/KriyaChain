@@ -1,12 +1,16 @@
 package utils
 
 import (
+	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
+
+var jwtOnce sync.Once
 
 type Claims struct {
 	UserID uuid.UUID `json:"user_id"`
@@ -18,6 +22,9 @@ type Claims struct {
 func getJWTSecret() string {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
+		jwtOnce.Do(func() {
+			log.Println("WARNING: JWT_SECRET tidak diset, pakai fallback development — JANGAN dipakai di production")
+		})
 		secret = "kriyachain-dev-secret-key"
 	}
 	return secret

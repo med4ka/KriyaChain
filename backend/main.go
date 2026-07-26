@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 
 	"prepdev-backend/config"
@@ -47,6 +49,17 @@ func RateLimiterMiddleware() gin.HandlerFunc {
 	}
 }
 
+func parseAllowedOrigins(raw string) map[string]bool {
+	origins := make(map[string]bool)
+	for _, o := range strings.Split(raw, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			origins[o] = true
+		}
+	}
+	return origins
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -66,16 +79,20 @@ func main() {
 	r.Use(RateLimiterMiddleware())
 	r.Static("/uploads", "./uploads")
 
+	allowedOrigins := parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS"))
+	if len(allowedOrigins) == 0 {
+		log.Println("WARNING: ALLOWED_ORIGINS tidak diset — semua origin akan ditolak!")
+	}
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		if origin != "" {
+		if origin != "" && allowedOrigins[origin] {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-		} else {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		} else if origin != "" {
+			log.Printf("WARNING: CORS blocked origin %q", origin)
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
