@@ -5,7 +5,6 @@ const urlsToCache = [
   "/explorer",
   "/admin",
   "/admin/auth",
-  "/owner/auth",
   "/manifest.json",
 ];
 

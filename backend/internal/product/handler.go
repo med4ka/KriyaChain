@@ -51,7 +51,7 @@ func (h *Handler) ClaimProduct(c *gin.Context) {
 	})
 	if err != nil {
 		status := http.StatusBadRequest
-		if err.Error()[:6] == "KLAIM " {
+		if len(err.Error()) >= 6 && err.Error()[:6] == "KLAIM " {
 			status = http.StatusConflict
 		}
 		c.JSON(status, gin.H{"status": "error", "message": err.Error()})
@@ -91,9 +91,61 @@ func (h *Handler) InitiateTransfer(c *gin.Context) {
 		return
 	}
 
+	msg := "Permintaan transfer dikirim. Menunggu konfirmasi penerima."
+	if history.InviteToken != nil && *history.InviteToken != "" {
+		msg = "Undangan transfer dibuat. Bagikan kode undangan ke penerima."
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"status":  "success",
-		"message": "Permintaan transfer dikirim. Menunggu konfirmasi penerima.",
+		"message": msg,
+		"data":    history,
+	})
+}
+
+func (h *Handler) InitiateTransferByArtisan(c *gin.Context) {
+	qrCode := c.Param("qr_code")
+
+	var req initiateTransferRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Username pemilik tujuan wajib diisi"})
+		return
+	}
+
+	artisanIDStr, _ := c.Get("user_id")
+	artisanID, err := uuid.Parse(artisanIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal membaca identitas pengrajin"})
+		return
+	}
+
+	artisanName, _ := c.Get("user_name")
+	artisanNameStr := ""
+	if artisanName != nil {
+		artisanNameStr = artisanName.(string)
+	}
+
+	history, err := h.service.InitiateTransferByArtisan(InitiateTransferByArtisanInput{
+		QRCode:         qrCode,
+		ArtisanID:      artisanID,
+		ArtisanName:    artisanNameStr,
+		TargetUsername: req.TargetUsername,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	msg := "Kepemilikan berhasil ditransfer!"
+	if history.InviteToken != nil && *history.InviteToken != "" {
+		msg = "Undangan transfer dibuat. Bagikan kode undangan ke penerima."
+	} else if history.Status == "pending" {
+		msg = "Permintaan transfer dikirim. Menunggu konfirmasi penerima."
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": msg,
 		"data":    history,
 	})
 }
@@ -165,4 +217,60 @@ func (h *Handler) GetPendingTransfers(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": histories})
+}
+
+func (h *Handler) GetTransferByInviteToken(c *gin.Context) {
+	token := c.Param("token")
+
+	history, product, err := h.service.GetTransferByInviteToken(token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"product_name": product.Name,
+			"from_owner":   history.FromOwner,
+			"invite_token": token,
+		},
+	})
+}
+
+func (h *Handler) AcceptTransferWithRegister(c *gin.Context) {
+	var req struct {
+		InviteToken string `json:"invite_token" binding:"required"`
+		Name        string `json:"name" binding:"required"`
+		Username    string `json:"username" binding:"required"`
+		Password    string `json:"password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Semua field wajib diisi"})
+		return
+	}
+
+	history, accessToken, refreshToken, userID, userName, userUsername, err := h.service.AcceptTransferWithRegister(AcceptWithRegisterInput{
+		InviteToken: req.InviteToken,
+		Name:        req.Name,
+		Username:    req.Username,
+		Password:    req.Password,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Akun berhasil dibuat dan transfer diterima!",
+		"data": gin.H{
+			"transfer":      history,
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+			"user_id":       userID,
+			"name":          userName,
+			"username":      userUsername,
+		},
+	})
 }

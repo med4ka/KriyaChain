@@ -30,11 +30,12 @@ type TransferHistory struct {
 	ProductID    uint       `json:"product_id"`
 	ProductHash  string     `gorm:"type:varchar(255)" json:"product_hash"`
 	FromOwnerID  *uuid.UUID `gorm:"type:uuid" json:"from_owner_id"`
-	ToOwnerID    uuid.UUID  `gorm:"type:uuid;not null" json:"to_owner_id"`
+	ToOwnerID    *uuid.UUID `gorm:"type:uuid" json:"to_owner_id"`
 	Status       string     `gorm:"type:varchar(20);default:pending" json:"status"`
 	InitiatedAt  time.Time  `json:"initiated_at"`
 	CompletedAt  *time.Time `json:"completed_at"`
 	FromOwner    string     `gorm:"type:varchar(100)" json:"from_owner"`
 	ToOwner      string     `gorm:"type:varchar(100)" json:"to_owner"`
 	TransferDate time.Time  `json:"transfer_date"`
+	InviteToken  *string    `gorm:"type:varchar(255)" json:"invite_token,omitempty"`
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Camera, Search, UserCheck, Sparkles, MapPin, Milestone, QrCode, Download, Image as ImageIcon, Volume2, VolumeX, Share2, Compass, KeyRound } from "lucide-react";
+import { X, Camera, Search, UserCheck, Sparkles, MapPin, Milestone, QrCode, Download, Image as ImageIcon, Volume2, VolumeX, Share2, Compass, KeyRound, User, Lock, Mail } from "lucide-react";
 import { useState, useRef } from "react";
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useReactToPrint } from "react-to-print";
@@ -13,17 +13,25 @@ interface Props {
   onClose: () => void;
 }
 
+type ClaimMode = "register" | "login" | "claimed";
+type OwnerAuthMode = "idle" | "register" | "login";
+
 export default function QrScannerModal({ isOpen, onClose }: Props) {
   const [manualCode, setManualCode] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [wastraData, setWastraData] = useState<any>(null);
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [activeView, setActiveView] = useState<"story" | "history">("story");
-  const [claimName, setClaimName] = useState("");
   const [claimCode, setClaimCode] = useState("");
   const [claimStatus, setClaimStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [claimMode, setClaimMode] = useState<ClaimMode>("register");
+  const [ownerAuthMode, setOwnerAuthMode] = useState<OwnerAuthMode>("idle");
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [ownerForm, setOwnerForm] = useState({ name: "", username: "", password: "" });
+
+  const [inviteMode, setInviteMode] = useState(false);
+  const [inviteData, setInviteData] = useState<any>(null);
 
   const certificateRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
@@ -31,24 +39,18 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
     documentTitle: `Sertifikat-KriyaChain-${wastraData?.name}`,
   });
 
-  const [savedWastra] = useState<any[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kriyachain_collection');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
+  const isOwnerLoggedIn = typeof window !== 'undefined' && !!localStorage.getItem("owner_token");
 
   const handleSpeak = (text: string) => {
     if ('speechSynthesis' in window) {
       if (isSpeaking) {
-        window.speechSynthesis.cancel(); 
+        window.speechSynthesis.cancel();
         setIsSpeaking(false);
       } else {
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'id-ID'; 
+        utterance.lang = 'id-ID';
         utterance.rate = 0.9;
-        utterance.onend = () => setIsSpeaking(false); 
+        utterance.onend = () => setIsSpeaking(false);
         window.speechSynthesis.speak(utterance);
         setIsSpeaking(true);
       }
@@ -63,7 +65,7 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
         await navigator.share({
           title: `Mahakarya KriyaChain: ${wastraData.name}`,
           text: `Lihat mahakarya ${wastraData.name} karya ${wastraData.artisan} yang terverifikasi di KriyaChain!`,
-          url: window.location.href, 
+          url: window.location.href,
         });
       } catch (error) {
         console.log("Share dibatalkan", error);
@@ -76,7 +78,6 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
   const saveToCollection = (data: any) => {
     const saved = localStorage.getItem('kriyachain_collection');
     const collection = saved ? JSON.parse(saved) : [];
-    
     if (!collection.find((item: any) => item.qr_code === data.qr_code)) {
       collection.push(data);
       localStorage.setItem('kriyachain_collection', JSON.stringify(collection));
@@ -87,13 +88,33 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
   const handleCloseModal = () => {
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setIsSpeaking(false);
-    onClose(); 
-  };  
+    setOwnerAuthMode("idle");
+    setOwnerForm({ name: "", username: "", password: "" });
+    setInviteMode(false);
+    setInviteData(null);
+    setClaimCode("");
+    setClaimStatus("idle");
+    onClose();
+  };
 
   const handleScan = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!manualCode) return;
-    setStatus("loading"); setClaimStatus("idle"); setClaimName("");
+    setStatus("loading"); setClaimStatus("idle"); setClaimMode("register"); setOwnerAuthMode("idle");
+
+    if (manualCode.length === 32) {
+      try {
+        const inviteRes = await fetch(apiUrl(`/api/transfers/invite/${manualCode}`));
+        const inviteJson = await inviteRes.json();
+        if (inviteRes.ok) {
+          setInviteMode(true);
+          setInviteData(inviteJson.data);
+          setStatus("success");
+          return;
+        }
+      } catch {}
+    }
+
     try {
       const res = await fetch(apiUrl(`/api/products/scan/${manualCode}`));
       const data = await res.json();
@@ -101,6 +122,13 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
         setWastraData(data.data);
         saveToCollection(data.data);
         setStatus("success");
+        if (data.data.is_claimed) {
+          setClaimMode("claimed");
+        } else if (isOwnerLoggedIn) {
+          setOwnerAuthMode("idle");
+        } else {
+          setOwnerAuthMode("register");
+        }
         try {
           const historyRes = await fetch(apiUrl(`/api/products/history/${manualCode}`));
           const historyJson = await historyRes.json();
@@ -110,28 +138,119 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
     } catch (error) { setStatus("error"); }
   };
 
-  const handleClaim = async (e: React.FormEvent) => {
+  const handleClaimWithAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!claimName || !wastraData) return;
+    if (!claimCode || !wastraData) return;
     setClaimStatus("loading");
+
     try {
-      const ownerToken = localStorage.getItem("owner_token");
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (ownerToken) headers["Authorization"] = `Bearer ${ownerToken}`;
+      let token: string | null = localStorage.getItem("owner_token");
+
+      if (ownerAuthMode === "register" || ownerAuthMode === "login") {
+        if (ownerAuthMode === "register") {
+          if (!ownerForm.name || !ownerForm.username || !ownerForm.password) {
+            toast.error("Nama, username, dan password wajib diisi");
+            setClaimStatus("error");
+            return;
+          }
+          const regRes = await fetch(apiUrl("/api/auth/owner/register"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ownerForm),
+          });
+          const regData = await regRes.json();
+          if (!regRes.ok) {
+            toast.error(regData.message || "Gagal daftar akun");
+            setClaimStatus("error");
+            return;
+          }
+          const newToken = regData.data.access_token;
+          localStorage.setItem("owner_token", newToken);
+          token = newToken;
+        } else {
+          if (!ownerForm.username || !ownerForm.password) {
+            toast.error("Username dan password wajib diisi");
+            setClaimStatus("error");
+            return;
+          }
+          const loginRes = await fetch(apiUrl("/api/auth/owner/login"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: ownerForm.username, password: ownerForm.password }),
+          });
+          const loginData = await loginRes.json();
+          if (!loginRes.ok) {
+            toast.error(loginData.message || "Gagal login");
+            setClaimStatus("error");
+            return;
+          }
+          const loginToken = loginData.data.access_token;
+          localStorage.setItem("owner_token", loginToken);
+          token = loginToken;
+        }
+      }
+
+      if (!token) {
+        toast.error("Silakan login terlebih dahulu");
+        setClaimStatus("error");
+        return;
+      }
       const res = await fetch(apiUrl(`/api/products/claim/${wastraData.qr_code}`), {
         method: "PUT",
-        headers,
-        body: JSON.stringify({ owner_name: claimName, claim_code: claimCode }),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ claim_code: claimCode }),
       });
       if (res.ok) {
         setClaimStatus("success");
-        setWastraData({ ...wastraData, is_claimed: true, owner_name: claimName });
+        setClaimMode("claimed");
+        setWastraData({ ...wastraData, is_claimed: true, owner_name: ownerForm.name || "Anda" });
         const historyRes = await fetch(apiUrl(`/api/products/history/${wastraData.qr_code}`));
         const historyJson = await historyRes.json();
         if (historyRes.ok) setHistoryData(historyJson.data || []);
         toast.success("Selamat! Wastra resmi menjadi milik Anda.");
-      } else { setClaimStatus("error"); toast.error("Klaim gagal! Periksa kode klaim."); }
-    } catch (error) { setClaimStatus("error"); toast.error("Terjadi kesalahan jaringan."); }
+      } else {
+        const errData = await res.json();
+        setClaimStatus("error");
+        toast.error(errData.message || "Klaim gagal! Periksa kode klaim.");
+      }
+    } catch (error) {
+      setClaimStatus("error");
+      toast.error("Terjadi kesalahan jaringan.");
+    }
+  };
+
+  const handleAcceptInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteData || !ownerForm.name || !ownerForm.username || !ownerForm.password) {
+      toast.error("Nama, username, dan password wajib diisi");
+      return;
+    }
+    setClaimStatus("loading");
+    try {
+      const res = await fetch(apiUrl("/api/transfers/accept-with-register"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invite_token: manualCode,
+          name: ownerForm.name,
+          username: ownerForm.username,
+          password: ownerForm.password,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem("owner_token", data.data.access_token);
+        setClaimStatus("success");
+        toast.success("Akun berhasil dibuat! Transfer diterima.");
+        setTimeout(() => handleCloseModal(), 2000);
+      } else {
+        setClaimStatus("error");
+        toast.error(data.message || "Gagal menerima undangan");
+      }
+    } catch {
+      setClaimStatus("error");
+      toast.error("Terjadi kesalahan jaringan.");
+    }
   };
 
   return (
@@ -140,20 +259,22 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
         {isOpen && (
           <div key="qr-modal" className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={handleCloseModal} className="absolute inset-0 bg-[#4A2E1B]/40 backdrop-blur-sm" />
-            
             <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative w-full max-w-md bg-[#F8F7F4] rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-              
               <div className="bg-[#4A2E1B] p-6 text-white text-center relative shrink-0">
                 <button onClick={handleCloseModal} className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"><X size={18} /></button>
-                <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md"><Camera size={32} className="text-amber-100" /></div>
-                <h3 className="text-xl font-serif font-bold">Verifikasi Wastra</h3>
-                <p className="text-white/60 text-xs mt-1">Pindai QR Code fisik untuk melacak jejak</p>
+                <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
+                  {inviteMode ? <UserCheck size={32} className="text-amber-100" /> : <Camera size={32} className="text-amber-100" />}
+                </div>
+                <h3 className="text-xl font-serif font-bold">{inviteMode ? "Undangan Transfer" : "Verifikasi Wastra"}</h3>
+                <p className="text-white/60 text-xs mt-1">
+                  {inviteMode ? "Buat akun untuk menerima wastra" : "Pindai QR Code fisik untuk melacak jejak"}
+                </p>
               </div>
 
               <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
                 {status === "idle" || status === "error" ? (
                   <div className="flex flex-col gap-4">
-                    {status === "error" && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 text-center font-medium">UUID tidak ditemukan atau salah.</div>}
+                    {status === "error" && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-xl border border-red-100 text-center font-medium">UUID atau token tidak ditemukan.</div>}
                     <div className="flex bg-[#4A2E1B]/5 rounded-xl p-1 mb-2">
                       <button type="button" onClick={() => setIsCameraActive(false)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${!isCameraActive ? "bg-white text-[#4A2E1B] shadow-sm" : "text-[#4A2E1B]/50 hover:text-[#4A2E1B]"}`}><Search size={14} /> Ketik Manual</button>
                       <button type="button" onClick={() => setIsCameraActive(true)} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${isCameraActive ? "bg-white text-[#4A2E1B] shadow-sm" : "text-[#4A2E1B]/50 hover:text-[#4A2E1B]"}`}><QrCode size={14} /> Kamera Scanner</button>
@@ -165,16 +286,57 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
                       </div>
                     ) : (
                       <form onSubmit={handleScan} className="flex flex-col gap-4">
-                        <input type="text" required placeholder="Masukkan UUID (Atau hasil scan)" value={manualCode} onChange={(e) => setManualCode(e.target.value)} className="w-full px-4 py-3 bg-white border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 font-mono text-center text-sm shadow-inner" />
+                        <input type="text" required placeholder="UUID / Token Undangan" value={manualCode} onChange={(e) => setManualCode(e.target.value)} className="w-full px-4 py-3 bg-white border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 font-mono text-center text-sm shadow-inner" />
                         <button type="submit" className="w-full py-3 bg-[#4A2E1B] text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-[#3A2214] transition-all active:scale-95 shadow-lg shadow-[#4A2E1B]/20"><Search size={18} /> Cek Keaslian</button>
                       </form>
                     )}
                   </div>
                 ) : status === "loading" ? (
                   <div className="py-12 flex flex-col items-center justify-center text-[#4A2E1B]"><div className="w-10 h-10 border-4 border-[#4A2E1B]/20 border-t-[#4A2E1B] rounded-full animate-spin mb-4" /><p className="text-sm font-bold animate-pulse">Memverifikasi Blockchain...</p></div>
+                ) : inviteMode && inviteData ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <UserCheck size={28} className="text-amber-700" />
+                      </div>
+                      <h4 className="text-lg font-serif font-bold text-[#4A2E1B] mb-2">Undangan Transfer</h4>
+                      <p className="text-sm text-[#4A2E1B]/70">
+                        <span className="font-bold">{inviteData.from_owner}</span> mengirimkan wastra <span className="font-bold">{inviteData.product_name}</span> kepada Anda
+                      </p>
+                    </div>
+
+                    <div className="bg-white rounded-xl border border-[#4A2E1B]/10 p-5">
+                      <h5 className="text-xs font-bold text-[#4A2E1B] uppercase tracking-wider mb-4 text-center">Buat Akun & Terima</h5>
+                      <form onSubmit={handleAcceptInvite} className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-widest mb-1">Nama</label>
+                          <div className="flex items-center gap-2 bg-[#F8F7F4] border border-[#4A2E1B]/10 rounded-xl px-3">
+                            <User size={16} className="text-[#4A2E1B]/30" />
+                            <input type="text" required value={ownerForm.name} onChange={(e) => setOwnerForm({ ...ownerForm, name: e.target.value })} className="w-full py-3 bg-transparent outline-none text-sm" placeholder="Nama lengkap" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-widest mb-1">Username</label>
+                          <div className="flex items-center gap-2 bg-[#F8F7F4] border border-[#4A2E1B]/10 rounded-xl px-3">
+                            <Mail size={16} className="text-[#4A2E1B]/30" />
+                            <input type="text" required value={ownerForm.username} onChange={(e) => setOwnerForm({ ...ownerForm, username: e.target.value })} className="w-full py-3 bg-transparent outline-none text-sm" placeholder="username" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-widest mb-1">Password</label>
+                          <div className="flex items-center gap-2 bg-[#F8F7F4] border border-[#4A2E1B]/10 rounded-xl px-3">
+                            <Lock size={16} className="text-[#4A2E1B]/30" />
+                            <input type="password" required value={ownerForm.password} onChange={(e) => setOwnerForm({ ...ownerForm, password: e.target.value })} className="w-full py-3 bg-transparent outline-none text-sm" placeholder="Min. 6 karakter" />
+                          </div>
+                        </div>
+                        <button type="submit" disabled={claimStatus === "loading"} className="w-full py-3 bg-[#4A2E1B] text-white rounded-xl font-bold hover:bg-[#3A2214] transition-all disabled:opacity-50">
+                          {claimStatus === "loading" ? "Memproses..." : "Buat Akun & Terima Transfer"}
+                        </button>
+                      </form>
+                    </div>
+                  </motion.div>
                 ) : (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                    
                     {wastraData.image_url ? (
                       <div className="w-full h-48 rounded-2xl overflow-hidden border border-[#4A2E1B]/10 shadow-inner">
                         <img src={wastraData.image_url} alt={wastraData.name} className="w-full h-full object-cover" />
@@ -199,7 +361,7 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
                     <div className="bg-white rounded-xl border border-[#4A2E1B]/10 p-5 min-h-[160px] max-h-[300px] overflow-y-auto custom-scrollbar">
                       {activeView === "story" ? (
                         <div className="relative">
-                          <button 
+                          <button
                             onClick={() => handleSpeak(wastraData?.description || "Belum ada catatan filosofi.")}
                             className={`absolute top-0 right-0 p-2 rounded-full transition-all ${isSpeaking ? "bg-amber-100 text-amber-700 animate-pulse shadow-sm" : "bg-[#4A2E1B]/5 text-[#4A2E1B]/50 hover:bg-[#4A2E1B]/10 hover:text-[#4A2E1B]"}`}
                             title={isSpeaking ? "Hentikan Suara" : "Dengarkan Cerita"}
@@ -210,17 +372,13 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
                             {wastraData?.description ? `"${wastraData.description}"` : "Belum ada catatan filosofi untuk wastra ini."}
                           </p>
                         </div>
-                      ) : ( 
+                      ) : (
                         <div className="space-y-6">
-                          
-                          
                           <div className="relative w-full h-32 bg-[#4A2E1B] rounded-xl overflow-hidden flex items-center justify-center shadow-inner">
                             <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '12px 12px' }}></div>
-                            
                             <div className="absolute w-12 h-12 bg-amber-400/30 rounded-full animate-ping" style={{ animationDuration: '2s' }}></div>
                             <div className="absolute w-24 h-24 bg-amber-400/20 rounded-full animate-ping" style={{ animationDuration: '2s', animationDelay: '0.5s' }}></div>
                             <div className="absolute w-36 h-36 bg-amber-400/10 rounded-full animate-ping" style={{ animationDuration: '2s', animationDelay: '1s' }}></div>
-                            
                             <div className="relative z-10 flex flex-col items-center mt-2">
                               <div className="bg-[#F8F7F4] p-2 rounded-full mb-1 shadow-lg shadow-black/40 border border-amber-900/20">
                                 <Compass size={20} className="text-amber-700 animate-[spin_4s_linear_infinite]" />
@@ -234,7 +392,6 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
                             </div>
                           </div>
 
-                          
                           <div className="relative border-l-2 border-[#4A2E1B]/10 ml-3 space-y-6 pt-2">
                             {historyData.length > 0 && historyData.map((hist, idx) => (
                               <div key={idx} className="relative pl-6">
@@ -258,8 +415,8 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
                         <UserCheck size={16} className="text-[#4A2E1B]" />
                         <h5 className="text-xs font-bold text-[#4A2E1B] uppercase tracking-wider">Status Kepemilikan</h5>
                       </div>
-                      
-                      {wastraData.is_claimed ? (
+
+                      {claimMode === "claimed" || wastraData.is_claimed ? (
                         <div className="flex flex-col gap-3">
                           <div className="p-3 bg-green-50 text-green-700 rounded-xl border border-green-100 text-xs font-medium text-center">
                             Dimiliki oleh: <span className="font-bold">{wastraData.owner_name}</span>
@@ -272,21 +429,56 @@ export default function QrScannerModal({ isOpen, onClose }: Props) {
                           </button>
                         </div>
                       ) : (
-                        <form onSubmit={handleClaim} className="space-y-3">
-                          <div className="flex gap-2">
-                            <input type="text" required placeholder="Nama Anda..." value={claimName} onChange={(e) => setClaimName(e.target.value)} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs" />
-                          </div>
+                        <form onSubmit={handleClaimWithAuth} className="space-y-3">
+                          {ownerAuthMode === "register" && (
+                            <>
+                              <div className="flex gap-2">
+                                <User size={16} className="text-[#4A2E1B]/40 self-center" />
+                                <input type="text" required value={ownerForm.name} onChange={(e) => setOwnerForm({ ...ownerForm, name: e.target.value })} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs" placeholder="Nama lengkap" />
+                              </div>
+                              <div className="flex gap-2">
+                                <Mail size={16} className="text-[#4A2E1B]/40 self-center" />
+                                <input type="text" required value={ownerForm.username} onChange={(e) => setOwnerForm({ ...ownerForm, username: e.target.value })} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs" placeholder="Username" />
+                              </div>
+                              <div className="flex gap-2">
+                                <Lock size={16} className="text-[#4A2E1B]/40 self-center" />
+                                <input type="password" required value={ownerForm.password} onChange={(e) => setOwnerForm({ ...ownerForm, password: e.target.value })} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs" placeholder="Password" />
+                              </div>
+                              <p className="text-[10px] text-[#4A2E1B]/40 text-center">
+                                Sudah punya akun?{' '}
+                                <button type="button" onClick={() => setOwnerAuthMode("login")} className="text-[#4A2E1B] font-bold underline">Login</button>
+                              </p>
+                            </>
+                          )}
+                          {ownerAuthMode === "login" && (
+                            <>
+                              <div className="flex gap-2">
+                                <Mail size={16} className="text-[#4A2E1B]/40 self-center" />
+                                <input type="text" required value={ownerForm.username} onChange={(e) => setOwnerForm({ ...ownerForm, username: e.target.value })} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs" placeholder="Username" />
+                              </div>
+                              <div className="flex gap-2">
+                                <Lock size={16} className="text-[#4A2E1B]/40 self-center" />
+                                <input type="password" required value={ownerForm.password} onChange={(e) => setOwnerForm({ ...ownerForm, password: e.target.value })} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs" placeholder="Password" />
+                              </div>
+                              <p className="text-[10px] text-[#4A2E1B]/40 text-center">
+                                Belum punya akun?{' '}
+                                <button type="button" onClick={() => setOwnerAuthMode("register")} className="text-[#4A2E1B] font-bold underline">Daftar</button>
+                              </p>
+                            </>
+                          )}
+                          {ownerAuthMode === "idle" && isOwnerLoggedIn && (
+                            <p className="text-[10px] text-green-700 text-center font-bold">Akun owner terhubung</p>
+                          )}
                           <div className="flex gap-2">
                             <KeyRound size={16} className="text-[#4A2E1B]/40 self-center" />
                             <input type="text" required placeholder="Kode Klaim (dari pengrajin)..." value={claimCode} onChange={(e) => setClaimCode(e.target.value)} className="flex-1 px-4 py-2 bg-[#F8F7F4] border border-[#4A2E1B]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#4A2E1B]/50 text-xs font-mono tracking-wider" />
                           </div>
-                          <button type="submit" disabled={claimStatus === "loading" || !claimName || !claimCode} className="w-full py-2 bg-[#4A2E1B] text-white rounded-xl text-xs font-bold hover:bg-[#3A2214] transition-colors disabled:opacity-50">
-                            {claimStatus === "loading" ? "Memverifikasi..." : "Klaim Wastra"}
+                          <button type="submit" disabled={claimStatus === "loading" || !claimCode} className="w-full py-2 bg-[#4A2E1B] text-white rounded-xl text-xs font-bold hover:bg-[#3A2214] transition-colors disabled:opacity-50">
+                            {claimStatus === "loading" ? "Memverifikasi..." : ownerAuthMode === "register" ? "Daftar & Klaim Wastra" : ownerAuthMode === "login" ? "Masuk & Klaim Wastra" : "Klaim Wastra"}
                           </button>
                         </form>
                       )}
                     </div>
-
                   </motion.div>
                 )}
               </div>

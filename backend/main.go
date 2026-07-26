@@ -114,10 +114,14 @@ func main() {
 
 	r.PUT("/api/products/claim/:qr_code", middleware.OwnerAuth(), prodHandler.ClaimProduct)
 	r.POST("/api/products/transfer/:qr_code", middleware.OwnerAuth(), prodHandler.InitiateTransfer)
+	r.POST("/api/products/transfer-by-artisan/:qr_code", middleware.ArtisanAuth(), prodHandler.InitiateTransferByArtisan)
 
 	r.GET("/api/transfers/pending", middleware.OwnerAuth(), prodHandler.GetPendingTransfers)
 	r.PATCH("/api/transfers/accept", middleware.OwnerAuth(), prodHandler.AcceptTransfer)
 	r.PATCH("/api/transfers/reject", middleware.OwnerAuth(), prodHandler.RejectTransfer)
+
+	r.GET("/api/transfers/invite/:token", prodHandler.GetTransferByInviteToken)
+	r.POST("/api/transfers/accept-with-register", prodHandler.AcceptTransferWithRegister)
 
 	fmt.Println("Server running on http://localhost:8080")
 	r.Run(":8080")

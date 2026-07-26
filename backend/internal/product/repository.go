@@ -86,3 +86,26 @@ func (r *Repository) GetArtisanByID(id uuid.UUID) (*models.Artisan, error) {
 	}
 	return &artisan, nil
 }
+
+func (r *Repository) GetTransferByInviteToken(token string) (*models.TransferHistory, error) {
+	var h models.TransferHistory
+	err := r.db.Where("invite_token = ?", token).First(&h).Error
+	if err != nil {
+		return nil, err
+	}
+	return &h, nil
+}
+
+func (r *Repository) UsernameExists(username string, role string) (bool, error) {
+	var count int64
+	if role == "artisan" {
+		err := r.db.Model(&models.Artisan{}).Where("username = ?", username).Count(&count).Error
+		return count > 0, err
+	}
+	err := r.db.Model(&models.Owner{}).Where("username = ?", username).Count(&count).Error
+	return count > 0, err
+}
+
+func (r *Repository) CreateOwner(owner *models.Owner) error {
+	return r.db.Create(owner).Error
+}

@@ -82,6 +82,19 @@ export default function ExplorerPage() {
       setIsLoading(false);
     }
 
+    const handleFocus = () => {
+      if (navigator.onLine) fetchProducts();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        fetchProducts();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
     const saved = localStorage.getItem('kriyachain_collection');
     if (saved) {
       setSavedWastra(JSON.parse(saved));
@@ -90,6 +103,8 @@ export default function ExplorerPage() {
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
 
@@ -234,7 +249,8 @@ export default function ExplorerPage() {
                       
                       <div className="absolute top-4 right-4 z-10 shadow-lg">
                         {product.is_claimed ? (
-                          <span className="px-3 py-1 bg-green-50/90 backdrop-blur-md text-green-700 text-[10px] font-bold uppercase tracking-widest rounded-full border border-green-200">
+                          <span className="px-3 py-1 bg-green-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-full border border-green-400 shadow-lg shadow-green-600/30 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
                             Dimiliki
                           </span>
                         ) : (
@@ -247,9 +263,15 @@ export default function ExplorerPage() {
 
                     <div className="p-6 flex flex-col flex-1 relative z-20">
                       <div className="flex justify-between items-start mb-4">
-                        <div className="p-2 bg-[#4A2E1B]/5 rounded-xl text-[#4A2E1B]">
+                        <div className={`p-2 rounded-xl ${product.is_claimed ? "bg-green-100 text-green-700" : "bg-[#4A2E1B]/5 text-[#4A2E1B]"}`}>
                           <ShieldCheck size={20} strokeWidth={1.5} />
                         </div>
+                        {product.is_claimed && product.owner_name && (
+                          <div className="flex items-center gap-1.5 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
+                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                            <span className="text-[9px] font-bold text-green-700 uppercase tracking-wider">Tersambung</span>
+                          </div>
+                        )}
                       </div>
                       
                       <h3 className="text-xl font-serif font-bold text-[#4A2E1B] mb-2">{product.name}</h3>
@@ -264,14 +286,15 @@ export default function ExplorerPage() {
                         )}
                       </div>
 
-                      <div className="mt-auto pt-4 border-t border-[#4A2E1B]/10">
+                      <div className="mt-auto pt-4 border-t border-[#4A2E1B]/10 space-y-1.5">
                         <p className="text-[10px] text-[#4A2E1B]/40 font-mono break-all line-clamp-1">
                           UUID: {product.qr_code}
                         </p>
-                        {product.is_claimed && (
-                          <p className="text-[10px] font-bold text-[#4A2E1B]/60 mt-2 uppercase tracking-wide">
+                        {product.is_claimed && product.owner_name && (
+                          <div className="flex items-center gap-2 text-[11px] font-bold text-green-800 bg-green-50/80 px-3 py-1.5 rounded-lg border border-green-100">
+                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                             Kolektor: <span className="text-[#4A2E1B]">{product.owner_name}</span>
-                          </p>
+                          </div>
                         )}
                       </div>
                     </div>

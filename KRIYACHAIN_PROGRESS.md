@@ -175,3 +175,53 @@ Status: ⬜ Belum mulai · 🟡 Sedang dikerjakan · ✅ Selesai · 🔴 Blocked
 
 - UUID untuk ID di tabel `artisans` dan `owners` dibuat di Go (`uuid.New()`) bukan di PostgreSQL (`gen_random_uuid()`), karena ekstensi uuid mungkin belum ter-install.
 - Refresh token endpoint menerima refresh_token di body JSON, bukan header khusus. Pola sederhana.
+
+### Fase 5 (UX Revision) — 26 Jul 2026 ✅
+
+**Tujuan:** Revisi UX flow sesuai SPEC 2.0, 2.2 (revisi), 2.3, dan DESIGN.md.
+
+**Perubahan:**
+
+**1. HAPUS halaman `/owner/auth` terpisah (SPEC 2.0)**
+- Folder `frontend/app/owner/auth/` dihapus
+- Route `/owner/auth` tidak lagi muncul di build output
+- Owner flow sekarang hanya via QrScannerModal inline
+
+**2. Owner signup/login inline di QrScannerModal (SPEC 2.0)**
+- `QrScannerModal.tsx` direwrite: saat produk ditemukan & belum diklaim:
+  - Jika belum login owner: tampil form **Daftar & Klaim** (name, username, password, claim_code)
+  - Toggle "Sudah punya akun? Login" → form **Masuk & Klaim** (username, password, claim_code)
+  - Jika sudah login (owner_token di localStorage): hanya field claim_code
+  - Submit: register/login owner → langsung claim wastra, satu aksi
+- Nama/username/password dikirim ke `/api/auth/owner/register` (atau login), lalu token dipakai untuk `PUT /api/products/claim/:qr_code`
+
+**3. Revisi endpoint transfer (SPEC 2.2)**
+- `ToOwnerID` di `TransferHistory` model: `uuid.UUID` → `*uuid.UUID` (nullable)
+- Tambah field `InviteToken *string` di `TransferHistory`
+- `InitiateTransfer`: jika `target_username` belum terdaftar, generate token undangan (16 byte crypto/rand → hex 32 char), simpan di `InviteToken`, `ToOwnerID` dibiarkan nil
+- Endpoint baru:
+  - `GET /api/transfers/invite/:token` (publik) — lihat info undangan (nama produk, pengirim)
+  - `POST /api/transfers/accept-with-register` (publik) — create owner + accept transfer, 1 aksi
+- Admin page: tab transfer menampilkan token undangan + tombol salin jika target belum terdaftar
+- QrScannerModal: deteksi token 32 karakter → coba fetch `/api/transfers/invite/:token` → tampil form register + accept
+
+**4. Admin auth styling konsisten**
+- `/admin/auth/page.tsx` sudah pakai palet `#4A2E1B` / `#D4C3B3` / `#F8F7F4` dan font Geist (global)
+- Tidak ada perubahan karena sudah sesuai DESIGN.md
+
+**5. Toast konsisten**
+- Semua halaman (`QrScannerModal`, `admin/page.tsx`, `admin/auth/page.tsx`, `explorer/page.tsx`) pakai `sonner`
+- Tema brown dari `globals.css` — semua notifikasi pakai style yang sama
+
+**Definisi of Done checklist:**
+- [x] Halaman /owner/auth dihapus, tidak ada link navigasi
+- [x] Owner register inline di QrScannerModal: 3 field (name, username, password) + claim_code
+- [x] Owner login inline di QrScannerModal: 2 field (username, password) + claim_code
+- [x] Submit register → AuthRequest ke `/api/auth/owner/register` → token → claim
+- [x] Submit login → AuthRequest ke `/api/auth/owner/login` → token → claim
+- [x] Transfer ke username belum terdaftar → generate invite token
+- [x] Endpoint `GET /api/transfers/invite/:token` — info publik
+- [x] Endpoint `POST /api/transfers/accept-with-register` — register + accept 1 aksi
+- [x] Admin page tampilkan invite token + tombol salin
+- [x] QrScannerModal terima token undangan 32 karakter
+- [x] Semua compile (`go build ./...`, `npm run build` sukses)

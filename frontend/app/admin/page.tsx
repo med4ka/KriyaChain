@@ -57,6 +57,7 @@ export default function AdminPage() {
 
   const [transferData, setTransferData] = useState({ uuid: "", newOwner: "" });
   const [transferStatus, setTransferStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [historySearch, setHistorySearch] = useState("");
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [historyStatus, setHistoryStatus] = useState<"idle" | "loading" | "success" | "error" | "not_found">("idle");
@@ -195,20 +196,32 @@ export default function AdminPage() {
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     setTransferStatus("loading");
+    setInviteToken(null);
     try {
-      const ownerToken = localStorage.getItem("owner_token");
-      const res = await fetch(apiUrl(`/api/products/transfer/${transferData.uuid}`), {
+      const cleanUuid = transferData.uuid.trim();
+      const artisanToken = localStorage.getItem("token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (artisanToken) headers["Authorization"] = `Bearer ${artisanToken}`;
+
+      const res = await fetch(apiUrl(`/api/products/transfer-by-artisan/${cleanUuid}`), {
         method: "POST",
-        headers: ownerToken ? { "Content-Type": "application/json", "Authorization": `Bearer ${ownerToken}` } : { "Content-Type": "application/json" },
-        body: JSON.stringify({ target_username: transferData.newOwner }),
+        headers,
+        body: JSON.stringify({ target_username: transferData.newOwner.trim() }),
       });
+      const result = await res.json();
       if (res.ok) {
         setTransferStatus("success");
         setTransferData({ uuid: "", newOwner: "" });
-        toast.success("Kepemilikan berhasil ditransfer!");
+        if (result.data && result.data.invite_token) {
+          setInviteToken(result.data.invite_token);
+          toast.success("Kepemilikan berhasil ditransfer!");
+        } else {
+          setInviteToken(null);
+          toast.success("Kepemilikan berhasil ditransfer!");
+        }
       } else {
         setTransferStatus("error");
-        toast.error("Gagal transfer! UUID mungkin salah.");
+        toast.error(result.message || "Gagal transfer! UUID mungkin salah.");
       }
     } catch (error) { setTransferStatus("error"); toast.error("Terjadi kesalahan jaringan."); }
   };
@@ -412,13 +425,24 @@ export default function AdminPage() {
                     <div className="w-10 h-10 bg-[#4A2E1B] rounded-full flex items-center justify-center text-white"><ArrowRightLeft size={20} /></div>
                     <div><h2 className="text-xl font-serif font-bold">Transfer Kepemilikan</h2><p className="text-xs text-[#4A2E1B]/50">Sahkan perpindahan tangan koleksi</p></div>
                   </div>
-                  <form onSubmit={handleTransfer} className="space-y-5">
+                    <form onSubmit={handleTransfer} className="space-y-5">
                     <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">UUID Wastra</label><input type="text" required value={transferData.uuid} onChange={(e) => setTransferData({ ...transferData, uuid: e.target.value })} className="w-full px-4 py-3 bg-white/50 border border-[#4A2E1B]/10 rounded-xl font-mono text-xs outline-none focus:ring-2 focus:ring-[#4A2E1B]/20" placeholder="Paste UUID dari QR scan..." /></div>
-                    <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Pemilik Baru</label><input type="text" required value={transferData.newOwner} onChange={(e) => setTransferData({ ...transferData, newOwner: e.target.value })} className="w-full px-4 py-3 bg-white/50 border border-[#4A2E1B]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#4A2E1B]/20" placeholder="Nama pembeli / kolektor baru" /></div>
+                    <div><label className="block text-[10px] font-bold text-[#4A2E1B]/40 uppercase tracking-[0.2em] mb-2">Username Penerima</label><input type="text" required value={transferData.newOwner} onChange={(e) => setTransferData({ ...transferData, newOwner: e.target.value })} className="w-full px-4 py-3 bg-white/50 border border-[#4A2E1B]/10 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#4A2E1B]/20" placeholder="Username customer / kolektor" /></div>
                     <button type="submit" disabled={transferStatus === "loading"} className="w-full bg-[#4A2E1B] text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-50">
-                      {transferStatus === "loading" ? "Mengesahkan..." : "Sahkan Perpindahan"}
+                      {transferStatus === "loading" ? "Mengesahkan..." : "Transfer Kepemilikan"}
                     </button>
                   </form>
+                  {inviteToken && (
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                      <p className="text-xs font-bold text-amber-800 mb-2">Token Undangan Transfer</p>
+                      <p className="text-xs text-amber-700 mb-3">Penerima belum terdaftar. Bagikan token ini:</p>
+                      <div className="flex gap-2">
+                        <input readOnly value={inviteToken} className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-mono text-center" />
+                        <button onClick={() => { navigator.clipboard.writeText(inviteToken); toast.success("Token disalin!"); }} className="px-3 py-2 bg-amber-700 text-white rounded-xl text-xs font-bold hover:bg-amber-800">Salin</button>
+                      </div>
+                      <p className="text-[10px] text-amber-600/70 mt-2">Penerima bisa memasukkan token ini di halaman utama → Scan Wastra</p>
+                    </motion.div>
+                  )}
                 </section>
               </motion.div>
             )}
