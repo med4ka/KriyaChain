@@ -26,18 +26,13 @@ const convertToBase64 = (file: File) => {
 
 export default function AdminPage() {
   const router = useRouter();
-  const [isAuthed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return !!localStorage.getItem("token");
-    }
-    return false;
-  });
 
   useEffect(() => {
-    if (!isAuthed) {
+    const token = localStorage.getItem("token");
+    if (!token) {
       router.push("/admin/auth");
     }
-  }, [isAuthed, router]);
+  }, [router]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -67,14 +62,18 @@ export default function AdminPage() {
   const [historyStatus, setHistoryStatus] = useState<"idle" | "loading" | "success" | "error" | "not_found">("idle");
 
   useEffect(() => {
+    let cancelled = false;
     const fetchStats = async () => {
       try {
         const res = await fetch(apiUrl("/api/stats"));
         const json = await res.json();
-        if (res.ok) setStats(json.data);
-      } catch (error) { console.error("Gagal memuat statistik"); }
+        if (res.ok && !cancelled) setStats(json.data);
+      } catch {
+        if (!cancelled) toast.error("Backend tidak terhubung! Nyalakan server backend.");
+      }
     };
     fetchStats();
+    return () => { cancelled = true; };
   }, [status, transferStatus, editStatus]); 
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, type: "register" | "edit") => {
@@ -117,7 +116,7 @@ export default function AdminPage() {
         toast.success("Wastra berhasil diamankan di Blockchain!");
       } else {
         setStatus("error");
-        toast.error("Gagal mendaftarkan Wastra.");
+        toast.error(data.message || "Gagal mendaftarkan Wastra.");
       }
     } catch (error) {
       setStatus("error");
@@ -231,8 +230,6 @@ export default function AdminPage() {
       }
     } catch (error) { setHistoryStatus("error"); toast.error("Terjadi kesalahan jaringan."); }
   };
-
-  if (!isAuthed) return <div className="min-h-screen bg-[#F8F7F4] flex items-center justify-center"><div className="w-10 h-10 border-4 border-[#4A2E1B]/20 border-t-[#4A2E1B] rounded-full animate-spin" /></div>;
 
   return (
     <div className="min-h-screen bg-[#F8F7F4] text-[#4A2E1B] font-sans pb-20 relative">

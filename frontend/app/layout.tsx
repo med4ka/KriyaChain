@@ -41,7 +41,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">{children}
         <ServiceWorkerRegister />
-        <Toaster position="top-center" richColors />
+        <Toaster position="top-center" richColors closeButton duration={4000} />
       </body>
     </html>
   );

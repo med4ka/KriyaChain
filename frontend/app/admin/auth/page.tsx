@@ -29,7 +29,7 @@ export default function ArtisanAuthPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("token", data.data.access_token);
         toast.success(mode === "login" ? "Selamat datang kembali!" : "Akun berhasil dibuat!");
         router.push("/admin");
       } else {

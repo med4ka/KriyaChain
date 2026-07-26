@@ -29,7 +29,7 @@ export default function OwnerAuthPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        localStorage.setItem("owner_token", data.access_token);
+        localStorage.setItem("owner_token", data.data.access_token);
         toast.success(mode === "login" ? "Selamat datang!" : "Akun owner berhasil dibuat!");
         router.push("/explorer");
       } else {

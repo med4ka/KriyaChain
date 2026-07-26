@@ -48,3 +48,51 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #D4C3B3 #F8F7F4;
 }
+
+/* ── Sonner Toast: KriyaChain Brown Theme ── */
+[data-sonner-toaster] {
+  --normal-bg: #4A2E1B !important;
+  --normal-text: #F8F7F4 !important;
+  --normal-border: #5C3F2A !important;
+  --success-bg: #4A2E1B !important;
+  --success-text: #F8F7F4 !important;
+  --error-bg: #4A2E1B !important;
+  --error-text: #F8F7F4 !important;
+  --shadow: 0 8px 32px rgba(74, 46, 27, 0.3) !important;
+}
+
+[data-sonner-toast] {
+  font-family: var(--font-geist-sans), system-ui, sans-serif !important;
+  border: 1px solid rgba(248, 247, 244, 0.12) !important;
+  border-radius: 12px !important;
+}
+
+[data-sonner-toast] [data-title] {
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+}
+
+[data-sonner-toast] [data-description] {
+  font-size: 0.75rem !important;
+  opacity: 0.85 !important;
+}
+
+[data-sonner-toast][data-type="success"] [data-icon] {
+  color: #A8D5A2 !important;
+}
+
+[data-sonner-toast][data-type="error"] [data-icon] {
+  color: #F4A2A2 !important;
+}
+
+/* ── Batik pattern overlay ── */
+[data-sonner-toast]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5l25 25-25 25L5 30z' fill='%23F8F7F4'/%3E%3Cpath d='M30 15l15 15-15 15L15 30z' fill='%23F8F7F4' fill-opacity='0.5'/%3E%3C/svg%3E");
+  background-size: 40px 40px;
+  pointer-events: none;
+  border-radius: inherit;
+}

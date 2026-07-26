@@ -205,7 +205,7 @@ export default function Home() {
         <div className="text-center mb-24">
           <span className="text-xs font-bold uppercase tracking-[0.3em] text-[#4A2E1B]/40 mb-3 block">Jejak Waktu</span>
           <h2 className="text-4xl md:text-5xl font-serif text-[#4A2E1B] tracking-tight">
-            Evolusi Wastra Nusantara.
+            Evolusi Wastra Nusantara
           </h2>
         </div>
 

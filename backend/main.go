@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 
 	"prepdev-backend/config"
@@ -29,7 +28,7 @@ func getLimiter(ip string) *rate.Limiter {
 	defer mu.Unlock()
 	limiter, exists := limiters[ip]
 	if !exists {
-		limiter = rate.NewLimiter(2, 5)
+		limiter = rate.NewLimiter(20, 50)
 		limiters[ip] = limiter
 	}
 	return limiter
@@ -67,17 +66,16 @@ func main() {
 	r.Use(RateLimiterMiddleware())
 	r.Static("/uploads", "./uploads")
 
-	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
-	if allowedOrigin == "" {
-		allowedOrigin = "http://localhost:3000"
-	}
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		if origin == allowedOrigin {
+		if origin != "" {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return

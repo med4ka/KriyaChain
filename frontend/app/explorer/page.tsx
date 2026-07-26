@@ -77,9 +77,7 @@ export default function ExplorerPage() {
     };
     
     if (navigator.onLine) {
-      setTimeout(() => {
-        fetchProducts();
-      }, 2000); 
+      fetchProducts();
     } else {
       setIsLoading(false);
     }
