@@ -57,8 +57,6 @@ func TestValidateToken_Invalid(t *testing.T) {
 }
 
 func TestValidateToken_Expired(t *testing.T) {
-	// We can't easily test expiration without manipulating time,
-	// but we can verify the error type for a garbage token
 	_, err := ValidateToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.garbage.garbage")
 	if err == nil {
 		t.Fatal("ValidateToken harus error untuk token sampah")
