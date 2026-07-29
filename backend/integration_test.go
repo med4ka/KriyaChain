@@ -112,7 +112,7 @@ func TestRegisterAndLoginArtisan(t *testing.T) {
 	setupTestDB(t)
 	router := setupRouter()
 
-	// Register
+	
 	registerBody := map[string]string{
 		"name":     "Batik Maker",
 		"username": "batik@test.com",
@@ -128,7 +128,7 @@ func TestRegisterAndLoginArtisan(t *testing.T) {
 		t.Fatalf("Register gagal: %d %s", w.Code, w.Body.String())
 	}
 
-	// Login
+	
 	loginBody := map[string]string{
 		"username": "batik@test.com",
 		"password": "password123",
@@ -173,7 +173,7 @@ func TestRegisterAndLoginOwner(t *testing.T) {
 	setupTestDB(t)
 	router := setupRouter()
 
-	// Register owner
+
 	registerBody := map[string]string{
 		"name":     "Kolektor Test",
 		"username": "kolektor@test.com",
@@ -189,7 +189,7 @@ func TestRegisterAndLoginOwner(t *testing.T) {
 		t.Fatalf("Register owner gagal: %d %s", w.Code, w.Body.String())
 	}
 
-	// Login owner
+	
 	loginBody := map[string]string{
 		"username": "kolektor@test.com",
 		"password": "rahasia456",
